@@ -70,7 +70,7 @@
     };
     $$('[data-f-kind]').forEach(function (b) {
       b.addEventListener('click', function () {
-        $$('[data-f-kind]').forEach(function (x) { x.setAttribute('aria-selected', x === b ? 'true' : 'false'); });
+        $$('[data-f-kind]').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
         state.kind = b.dataset.fKind; apply();
       });
     });
@@ -85,13 +85,13 @@
       });
     });
     var qi = $('#q'), si = $('#sort');
-    if (qi) qi.addEventListener('input', function () { state.q = qi.value.trim().toLowerCase(); apply(); });
+    if (qi) qi.addEventListener('input', function () { state.q = qi.value.trim().toLowerCase().replace(/[\u2018\u2019\u02bc`]/g, "'"); apply(); });
     if (si) si.addEventListener('change', function () { state.sort = si.value; apply(); });
     var reset = $('#reset');
     if (reset) reset.addEventListener('click', function () {
       state = { kind: 'all', stance: {}, market: {}, q: '', sort: state.sort };
       if (qi) qi.value = '';
-      $$('[data-f-kind]').forEach(function (x) { x.setAttribute('aria-selected', x.dataset.fKind === 'all' ? 'true' : 'false'); });
+      $$('[data-f-kind]').forEach(function (x) { x.setAttribute('aria-pressed', x.dataset.fKind === 'all' ? 'true' : 'false'); });
       $$('.chip').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
       apply();
     });
@@ -103,11 +103,12 @@
 
   function drawOrbit(host, data) {
     var NS = 'http://www.w3.org/2000/svg', S = 640, C = S / 2;
-    var R0 = 178, K = 104, RMIN = 86, RMAX = 300;
-    var rOf = function (m) { return m === null ? R0 : Math.max(RMIN, Math.min(RMAX, R0 + K * m)); };
-    var A0 = -66, A1 = 246; // leave a gap at the top for ring labels
+    // Radius encodes target/price on a log scale, so a halving and a doubling sit the same distance from the ring.
+    var R0 = 196, K = 100, RMIN = 88, RMAX = 292;
+    var rOf = function (m) { return m === null ? R0 : Math.max(RMIN, Math.min(RMAX, R0 + K * Math.log(1 + m))); };
+    var A0 = -64, A1 = 244; // leave a gap at the top for ring labels
     var el = function (n, a, p) { var x = doc.createElementNS(NS, n); for (var k in a) x.setAttribute(k, a[k]); if (p) p.appendChild(x); return x; };
-    var svg = el('svg', { viewBox: '0 0 ' + S + ' ' + S, 'aria-hidden': 'true' });
+    var svg = el('svg', { viewBox: '0 0 ' + S + ' ' + S });
     var defs = el('defs', {}, svg);
     var gl = el('radialGradient', { id: 'oglow' }, defs);
     el('stop', { offset: '0', 'stop-color': '#E3C887', 'stop-opacity': '.38' }, gl);
@@ -123,81 +124,136 @@
     el('rect', { x: -80, y: -80, width: 80, height: 160 }, clip);
 
     var g = el('g', { transform: 'translate(' + C + ',' + C + ')' }, svg);
-    // rings
     [[-0.5, '−50%'], [0, 'PRICE'], [0.5, '+50%'], [1, '+100%']].forEach(function (r) {
       var rr = rOf(r[0]);
       el('circle', { r: rr, 'class': 'o-ring' + (r[0] === 0 ? ' zero' : '') }, g);
-      var t = el('text', { x: 6, y: -rr - 6, 'class': 'o-lab' + (r[0] === 0 ? ' zero' : '') }, g);
+      var t = el('text', { x: 0, y: -rr - 6, 'text-anchor': 'middle', 'class': 'o-lab' + (r[0] === 0 ? ' zero' : '') }, g);
       t.textContent = r[1];
     });
-    // ticks (slow spin)
     var spin = el('g', { 'class': 'o-spin' }, g);
     for (var i = 0; i < 120; i++) {
-      var a = i / 120 * Math.PI * 2, r1 = RMAX + 14, r2 = RMAX + (i % 10 === 0 ? 22 : 18);
+      var a = i / 120 * Math.PI * 2, r1 = RMAX + 16, r2 = RMAX + (i % 10 === 0 ? 24 : 20);
       el('line', { x1: r1 * Math.cos(a), y1: r1 * Math.sin(a), x2: r2 * Math.cos(a), y2: r2 * Math.sin(a), stroke: 'rgba(241,235,221,' + (i % 10 === 0 ? .35 : .14) + ')', 'stroke-width': 1 }, spin);
     }
     // sun: day/night split, tilted by the obliquity of the ecliptic
     var sun = el('g', { 'class': 'o-sun' }, g);
-    el('circle', { r: 120, fill: 'url(#oglow)' }, sun);
+    el('circle', { r: 112, fill: 'url(#oglow)' }, sun);
     var body = el('g', { transform: 'rotate(23.44)' }, sun);
-    el('circle', { r: 58, fill: 'url(#onight)' }, body);
+    el('circle', { r: 54, fill: 'url(#onight)' }, body);
     var lit = el('g', { 'clip-path': 'url(#ohalf)' }, body);
-    el('circle', { r: 58, fill: 'url(#oday)' }, lit);
-    el('line', { x1: 0, y1: -70, x2: 0, y2: 70, stroke: 'rgba(241,235,221,.35)', 'stroke-width': 1 }, body);
-    el('circle', { r: 58, fill: 'none', stroke: 'rgba(241,235,221,.25)', 'stroke-width': 1 }, body);
-    var lab = el('text', { y: 92, 'text-anchor': 'middle', 'class': 'o-lab' }, sun);
+    el('circle', { r: 54, fill: 'url(#oday)' }, lit);
+    el('line', { x1: 0, y1: -66, x2: 0, y2: 66, stroke: 'rgba(241,235,221,.35)', 'stroke-width': 1 }, body);
+    el('circle', { r: 54, fill: 'none', stroke: 'rgba(241,235,221,.25)', 'stroke-width': 1 }, body);
+    var lab = el('text', { y: 80, 'text-anchor': 'middle', 'class': 'o-lab' }, sun);
     lab.textContent = data.length + ' CALLS';
 
-    var tip = doc.createElement('div'); tip.className = 'o-tip'; host.appendChild(tip);
+    function pctTxt(m) { var v = Math.round(m * 100); return (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v) + '%'; }
+
+    var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var fmt = function (iso) { var q = iso.split('-'); return +q[2] + ' ' + MON[+q[1] - 1] + ' ' + q[0]; };
+    var stems = el('g', {}, g), marks = el('g', {}, g);
+    var halo = el('circle', { r: 13, 'class': 'o-halo' }, g);
     var pts = [];
     data.forEach(function (d, i) {
       var ang = (A0 + (A1 - A0) * (data.length === 1 ? .5 : i / (data.length - 1))) * Math.PI / 180;
-      var r = rOf(d.m), x = r * Math.cos(ang), y = r * Math.sin(ang);
-      var st = d.st;
-      var stem = null;
-      if (d.m !== null) stem = el('line', { x1: R0 * Math.cos(ang), y1: R0 * Math.sin(ang), x2: x, y2: y, 'class': 'o-stem ' + st, style: '--i:' + i }, g);
-      var p;
-      if (d.k === 'report') p = el('rect', { x: x - 5.5, y: y - 5.5, width: 11, height: 11, transform: 'rotate(45 ' + x + ' ' + y + ')', 'class': 'o-pt ' + st, style: '--i:' + i, tabindex: 0 }, g);
-      else p = el('circle', { cx: x, cy: y, r: 6.2, 'class': 'o-pt ' + st, style: '--i:' + i, tabindex: 0 }, g);
+      var r = rOf(d.m), x = +(r * Math.cos(ang)).toFixed(2), y = +(r * Math.sin(ang)).toFixed(2);
+      var stem = d.m === null ? null : el('line', { x1: (R0 * Math.cos(ang)).toFixed(2), y1: (R0 * Math.sin(ang)).toFixed(2), x2: x, y2: y, 'class': 'o-stem ' + d.st, style: '--i:' + i }, stems);
+      var p, h = 7;
+      // diamonds are drawn in place (no transform attribute), and nothing is scaled on hover, so marks never move
+      if (d.k === 'report') p = el('path', { d: 'M' + x + ' ' + (y - h) + 'L' + (x + h) + ' ' + y + 'L' + x + ' ' + (y + h) + 'L' + (x - h) + ' ' + y + 'Z', 'class': 'o-pt ' + d.st, style: '--i:' + i }, marks);
+      else p = el('circle', { cx: x, cy: y, r: 5.4, 'class': 'o-pt ' + d.st, style: '--i:' + i }, marks);
+      p.setAttribute('tabindex', i === data.length - 1 ? '0' : '-1'); // one tab stop; arrow keys move inside
       p.setAttribute('role', 'link');
-      p.setAttribute('aria-label', d.n + ', ' + d.r);
+      p.setAttribute('aria-label', d.n + ', ' + d.r + ', ' + fmt(d.d) + (d.m === null ? ', no target' : ', ' + d.mt + ' to target'));
       pts.push({ p: p, stem: stem, d: d, x: x, y: y });
     });
     host.appendChild(svg);
+    var tip = doc.createElement('div'); tip.className = 'o-tip'; tip.setAttribute('aria-hidden', 'true'); host.appendChild(tip);
 
-    var fmt = function (iso) { var p = iso.split('-'); return +p[2] + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+p[1] - 1] + ' ' + p[0]; };
-    var show = function (o) {
-      pts.forEach(function (q) { q.p.classList.toggle('on', q === o); if (q.stem) q.stem.classList.toggle('on', q === o); });
+    var active = null, lastType = 'mouse';
+    function line(cls, text) { var s = doc.createElement('span'); if (cls) s.className = cls; s.textContent = text; return s; }
+    function activate(o) {
+      if (active === o) return;
+      active = o;
+      pts.forEach(function (q) { var on = q === o; q.p.classList.toggle('on', on); if (q.stem) q.stem.classList.toggle('on', on); });
       host.classList.add('dim');
-      var m = o.d.m, mv = m === null ? '<em class="mv nr">No target</em>' : '<em class="mv ' + o.d.st + '">' + (m > 0 ? '+' : m < 0 ? '−' : '') + Math.abs(Math.round(m * 100)) + '% to target</em>';
-      tip.innerHTML = '<b></b><span></span><span>' + mv + '</span>';
-      tip.querySelector('b').textContent = o.d.n;
-      tip.querySelectorAll('span')[0].textContent = o.d.r + ' · ' + (o.d.k === 'note' ? 'Note' : 'Report') + ' · ' + fmt(o.d.d);
-      var box = host.getBoundingClientRect(), sc = box.width / S;
-      var px = (o.x + C) * sc, py = (o.y + C) * sc;
+      halo.setAttribute('cx', o.x); halo.setAttribute('cy', o.y); halo.classList.add('show');
+      tip.textContent = '';
+      var b = doc.createElement('b'); b.textContent = o.d.n; tip.appendChild(b);
+      tip.appendChild(line('', o.d.r + ' · ' + (o.d.k === 'note' ? 'One-page note' : 'Full report') + ' · ' + fmt(o.d.d)));
+      if (o.d.pt) tip.appendChild(line('o-px', o.d.pt));
+      tip.appendChild(line('mv ' + (o.d.m === null ? 'nr' : o.d.st), o.d.m === null ? 'No target issued' : o.d.mt + ' to target'));
+      tip.appendChild(line('o-hint', lastType === 'touch' ? 'Tap again to open' : lastType === 'key' ? 'Press Enter to open' : 'Click to open'));
+      place(o);
       tip.classList.add('show');
-      var tw = tip.offsetWidth, th = tip.offsetHeight;
-      var left = px + 16, top = py - th - 12;
-      if (left + tw > box.width) left = px - tw - 16;
-      if (top < 0) top = py + 16;
-      tip.style.left = Math.max(0, left) + 'px'; tip.style.top = top + 'px';
-    };
-    var hide = function () { host.classList.remove('dim'); tip.classList.remove('show'); pts.forEach(function (q) { q.p.classList.remove('on'); if (q.stem) q.stem.classList.remove('on'); }); };
-    var touched = null;
-    pts.forEach(function (o) {
-      o.p.addEventListener('mouseenter', function () { show(o); });
-      o.p.addEventListener('focus', function () { show(o); });
-      o.p.addEventListener('mouseleave', hide);
-      o.p.addEventListener('blur', hide);
-      o.p.addEventListener('click', function (ev) {
-        if (ev.pointerType === 'touch' || ('ontouchstart' in window && touched !== o)) {
-          if (touched !== o) { touched = o; show(o); ev.preventDefault(); return; }
-        }
-        location.href = o.d.s + '/';
-      });
-      o.p.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') location.href = o.d.s + '/'; });
+    }
+    function place(o) {
+      var box = host.getBoundingClientRect(), sc = box.width / S;
+      var px = (o.x + C) * sc, py = (o.y + C) * sc, gap = 16 * sc + 8;
+      tip.style.left = '0px'; tip.style.top = '0px';
+      var tw = tip.offsetWidth, th = tip.offsetHeight, vw = doc.documentElement.clientWidth;
+      var minL = -box.left + 8, maxL = vw - box.left - tw - 8; // keep it on screen, not just inside the ring
+      var left = o.x >= 0 ? px + gap : px - tw - gap;
+      if (left > maxL) left = px - tw - gap;
+      if (left < minL) left = px + gap;
+      left = Math.max(minL, Math.min(maxL, left));
+      var top = py - th / 2;
+      if (left < px + gap - 2 && left + tw > px - gap + 2) top = o.y < 0 ? py + gap : py - th - gap; // no room beside it: go below/above
+      top = Math.max(-th / 2, Math.min(box.height - th / 2, top));
+      tip.style.left = Math.round(left) + 'px'; tip.style.top = Math.round(top) + 'px';
+    }
+    function deactivate() {
+      if (!active) return;
+      active = null;
+      host.classList.remove('dim'); halo.classList.remove('show'); tip.classList.remove('show');
+      pts.forEach(function (q) { q.p.classList.remove('on'); if (q.stem) q.stem.classList.remove('on'); });
+    }
+    function nearest(ev, maxD) {
+      var m = g.getScreenCTM(); if (!m) return null;
+      var pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+      var u = pt.matrixTransform(m.inverse()), best = null, bd = Infinity;
+      pts.forEach(function (q) { var dx = q.x - u.x, dy = q.y - u.y, dd = dx * dx + dy * dy; if (dd < bd) { bd = dd; best = q; } });
+      return Math.sqrt(bd) * m.a <= maxD ? best : null; // compare in screen pixels
+    }
+    function go(o) { location.href = o.d.s + '/'; }
+    var downAt = 0;
+    svg.addEventListener('pointerdown', function (ev) { lastType = ev.pointerType || 'mouse'; downAt = Date.now(); });
+    svg.addEventListener('pointermove', function (ev) {
+      if (ev.pointerType === 'touch') return;
+      lastType = 'mouse';
+      var o = nearest(ev, 16);
+      if (o) activate(o); else deactivate();
+      svg.style.cursor = o ? 'pointer' : '';
     });
-    doc.addEventListener('click', function (ev) { if (!host.contains(ev.target)) { touched = null; hide(); } });
+    svg.addEventListener('pointerleave', function (ev) { if (ev.pointerType !== 'touch') deactivate(); });
+    svg.addEventListener('click', function (ev) {
+      var touch = lastType === 'touch' || lastType === 'pen';
+      var o = nearest(ev, touch ? 24 : 16);
+      if (!o) { deactivate(); return; }
+      if (touch && active !== o) { activate(o); return; }
+      go(o);
+    });
+    pts.forEach(function (o) {
+      o.p.addEventListener('focus', function () {
+        if (Date.now() - downAt < 800) return; // focus caused by a tap or click: the click handler decides
+        lastType = 'key'; activate(o);
+      });
+      o.p.addEventListener('blur', function () { if (active === o) deactivate(); });
+      o.p.addEventListener('keydown', function (ev) {
+        var k = ev.key, idx = pts.indexOf(o), to = null;
+        if (k === 'Enter' || k === ' ') { ev.preventDefault(); go(o); return; }
+        if (k === 'ArrowRight' || k === 'ArrowDown') to = pts[(idx + 1) % pts.length];
+        else if (k === 'ArrowLeft' || k === 'ArrowUp') to = pts[(idx - 1 + pts.length) % pts.length];
+        else if (k === 'Home') to = pts[0];
+        else if (k === 'End') to = pts[pts.length - 1];
+        else if (k === 'Escape') { deactivate(); return; }
+        if (!to) return;
+        ev.preventDefault();
+        o.p.setAttribute('tabindex', '-1'); to.p.setAttribute('tabindex', '0'); to.p.focus();
+      });
+    });
+    doc.addEventListener('pointerdown', function (ev) { if (!svg.contains(ev.target)) deactivate(); });
+    window.addEventListener('resize', function () { var o = active; if (o) { active = null; activate(o); } });
   }
 
   /* ---------------- reader: view switch */
@@ -205,14 +261,17 @@
   var views = { web: $('#view-web'), pages: $('#view-pages') };
   function setView(v, push) {
     if (!views.web) v = 'pages';
-    tabs.forEach(function (b) { b.setAttribute('aria-selected', b.dataset.view === v ? 'true' : 'false'); });
+    tabs.forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.view === v ? 'true' : 'false'); });
     if (views.web) views.web.hidden = v !== 'web';
     if (views.pages) views.pages.hidden = v !== 'pages';
     if (push) history.replaceState(null, '', v === 'pages' ? '#original' : location.pathname + location.search);
     if (v === 'pages') primeText();
   }
   tabs.forEach(function (b) { b.addEventListener('click', function () { setView(b.dataset.view, true); }); });
-  if (views.pages) setView(location.hash === '#original' || !views.web ? 'pages' : 'web', false);
+  if (views.pages) {
+    setView(location.hash === '#original' || !views.web ? 'pages' : 'web', false);
+    window.addEventListener('hashchange', function () { setView(location.hash === '#original' ? 'pages' : 'web', false); });
+  }
 
   /* ---------------- reader: selectable text over each page */
   var pagesEl = $('.pages'), textData = null, textReq = null;
